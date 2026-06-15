@@ -9,8 +9,10 @@ AI-Enabled Solutions Developer role at HII Mission Technologies.
 
 ---
 
-## Current Goal
-> **Build the MVP and deploy to Vercel.**
+## Status
+MVP is built and committed. Next step: deploy to Vercel and verify the live URL.
+
+**Live URL:** https://incident-report-generator-ruby.vercel.app
 
 ---
 
@@ -91,14 +93,16 @@ from the notes.`,
 ---
 
 ## MVP Features
-- [ ] Textarea for raw notes
-- [ ] Incident type dropdown (data breach / ransomware / phishing / outage / unauthorized access / malware / other)
-- [ ] Severity selector (low / medium / high / critical)
-- [ ] Generate button → POST to `/api/generate`
-- [ ] Rendered report with section headers
-- [ ] Download as .md button
-- [ ] Loading state during API call
-- [ ] Error state if API call fails
+- [x] Textarea for raw notes
+- [x] Incident type dropdown (data breach / ransomware / phishing / outage / unauthorized access / malware / other)
+- [x] Severity selector (low / medium / high / critical)
+- [x] Generate button → POST to `/api/generate`
+- [x] Rendered report with section headers
+- [x] Download as .md button (with YAML frontmatter: type, severity, generated date)
+- [x] Copy to clipboard button
+- [x] Loading state during API call (spinner + "Generating..." label)
+- [x] Error state if API call fails (red inline message)
+- [x] Information Gaps section rendered as yellow warning box when gaps are present
 
 ---
 
@@ -143,12 +147,12 @@ Environment Variables before first deploy.
 
 ---
 
-## README Checklist (produce at end of project)
-- [ ] What it does
-- [ ] Live URL
-- [ ] Stack and rationale
-- [ ] How AI is integrated + prompt design
-- [ ] How to run locally
-- [ ] How API key is protected
-- [ ] Known limitations
-- [ ] What I'd build next
+## README Checklist
+- [x] What it does
+- [x] Live URL
+- [x] Stack and rationale
+- [x] How AI is integrated + prompt design
+- [x] How to run locally
+- [x] How API key is protected
+- [x] Known limitations
+- [x] What I'd build next
