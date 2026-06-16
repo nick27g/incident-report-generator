@@ -1,24 +1,71 @@
 # Incident Report Generator
 
-A web app that turns raw, unstructured incident-response notes into a formatted security incident report using Claude AI. Built as a portfolio project targeting an AI-Enabled Solutions Developer role at HII Mission Technologies.
+A dark-themed, AI-powered web app that transforms raw, unstructured incident-response notes into a complete security incident report package — including a plain-English executive summary, an interactive remediation checklist, a stakeholder notification guide, and an interactive incident timeline. Built as a portfolio project targeting an AI-Enabled Solutions Developer role at HII Mission Technologies.
 
-**Live:** https://incident-report-generator-ruby.vercel.app
+**Live demo:** https://incident-report-generator-ruby.vercel.app
 
 ---
 
-## What It Does
+<!-- Screenshot: add screenshot here -->
 
-Paste messy notes from an active or post-mortem incident response. Select the incident type and severity. Click **Generate Report**. The app sends the notes to Claude and returns a professionally structured report with these sections:
+---
 
-- Executive Summary
-- Timeline
-- Affected Systems
-- Root Cause
-- Remediation Steps
-- Lessons Learned
-- Information Gaps *(highlighted in yellow if the notes are missing details a complete report would need)*
+## Features
 
-From there you can copy the report to the clipboard or download it as a `.md` file with a metadata header (type, severity, generated date).
+**Core report generation**
+- Paste raw notes, select incident type and severity, click Generate
+- Claude produces a structured 7-section report: Executive Summary, Timeline, Affected Systems, Root Cause, Remediation Steps, Lessons Learned, Information Gaps
+- Information Gaps section highlighted as a warning box when meaningful gaps are detected
+
+**AI auto-detection**
+- Both dropdowns default to "Auto-detect"
+- A fast Claude call classifies the incident type and severity from the raw notes before the main report runs
+- Detected values shown in a live alert banner with a one-sentence reasoning explanation
+
+**Plain English executive card**
+- A separate Claude call rewrites the report in plain language for non-technical business stakeholders
+- ~150 words, 8th-grade reading level, answers: what happened, how serious is it, what needs to happen now
+
+**Remediation checklist**
+- Claude generates a prioritised list of 6–10 immediate action items with responsible roles (IT Team, Management, Legal, etc.)
+- Interactive checkboxes with completion counter — check off items as you work through them
+- Role labels are color-coded by function
+
+**Severity color coding**
+- Low → green, Medium → amber, High → orange, Critical → red
+- Applied to the severity dropdown, auto-detection banner, and report header badge
+- One-sentence plain-English explainer of business impact appears under the badge
+
+**Glossary tooltips**
+- 24 common security terms (ransomware, phishing, lateral movement, CVE, MFA, etc.) are automatically detected in the report text
+- Hovering shows a plain-English definition in a dark popover
+- Terms are marked with a subtle dotted underline
+
+**Incident timeline builder**
+- Timeline section from the generated report is pre-populated as a vertical timeline
+- Add custom events with a timestamp and description field
+- Delete individual entries, copy the full timeline as plain text
+
+**Who Needs to Know**
+- Claude identifies 5–8 stakeholder roles based on incident type and severity
+- Each role includes a one-sentence note on what their involvement should be
+- Role icons mapped by function
+
+**Quality score**
+- A parallel Claude call scores the raw notes 1–10 for completeness
+- Score badge in the report header (green/amber/red by threshold)
+- One-line tip on what detail would most improve the next report
+
+**Email delivery**
+- Enter an email address and send the full report via Resend
+- HTML email includes: severity badge, incident metadata, plain-English summary, report body with Information Gaps warning box, remediation checklist, who-needs-to-know section, quality score
+- Plain text fallback included; HTML build failure degrades gracefully
+
+**Export options**
+- Copy as Markdown
+- Copy as plain text (markdown stripped)
+- Download as `.md` (with YAML frontmatter: type, severity, generated date)
+- Download as `.txt`
 
 ---
 
@@ -26,63 +73,73 @@ From there you can copy the report to the clipboard or download it as a `.md` fi
 
 | Layer | Choice | Why |
 |-------|--------|-----|
-| Frontend | React + Vite | Lightweight SPA, no SSR needed; fast dev iteration |
-| Styling | Tailwind CSS v4 | Utility-first, consistent design without a component library |
-| API proxy | Vercel Serverless Function (`/api/generate.js`) | Keeps the Anthropic API key off the client entirely |
-| AI | Anthropic API — `claude-sonnet-4-6` | Best balance of output quality and latency for structured document generation |
-| Deploy | Vercel | Free tier, GitHub-connected, zero-config for both static assets and serverless functions |
+| Frontend | React + Vite | Lightweight SPA, fast iteration |
+| Styling | Tailwind CSS v4 + inline styles | Utility classes for layout; inline styles for dynamic dark-theme color values |
+| AI | Anthropic API — `claude-sonnet-4-6` | Powers all seven Claude calls |
+| API proxy | Vercel Serverless Functions | Both API keys stay server-side; never reach the browser |
+| Email | Resend | Transactional email with a fully inline-CSS HTML template |
+| Deploy | Vercel | GitHub-connected, auto-deploy on push to main |
 
 ---
 
-## How the AI Is Integrated
+## How It Works
 
-The frontend never calls the Anthropic API directly. It POSTs `{ notes, incidentType, severity }` to `/api/generate`, which is a Vercel serverless function that:
+```
+User submits notes
+       │
+       ▼
+Phase 1 ── /api/detect           → classify incident type + severity (if auto)
+       │
+       ▼
+Phase 2 ── /api/generate  ┐      → structured 7-section report
+           /api/score      ┘      → notes quality score           (parallel)
+       │
+       ▼
+Phase 3 ── /api/plain-english  ┐  → plain English summary
+           /api/checklist      ├  → action checklist              (parallel)
+           /api/roles          ┘  → stakeholder list
+       │
+       ▼
+All results delivered together → ReportOutput renders every card
+```
 
-1. Validates the request body.
-2. Instantiates the Anthropic client using a server-side environment variable.
-3. Sends the notes as the user message, with a fixed system prompt that instructs Claude to produce the seven-section report format in professional third-person analyst voice.
-4. Returns the raw markdown report string to the browser.
+Every Phase 3 call is wrapped in `Promise.allSettled` with individual try/catch blocks. If any single supplementary call fails, that card is silently omitted and the rest of the output is unaffected.
 
-The system prompt enforces structure (section headers as `## Section Name`), voice, and a strict rule against guessing — if a fact is not in the notes, Claude must label it as unknown. The "Information Gaps" section is a deliberate prompt feature that surfaces what a real analyst would flag as missing.
+---
+
+## API Key Security
+
+Neither `ANTHROPIC_API_KEY` nor `RESEND_API_KEY` ever touches the browser. Both are read from `process.env` inside Vercel serverless functions. Locally they live in `.env`, which is in `.gitignore`. In production they are set through the Vercel dashboard under **Project → Settings → Environment Variables**.
 
 ---
 
 ## Running Locally
 
-Vercel Functions don't run with plain `vite dev`. Use the Vercel CLI to get both the frontend and the API route running together:
+Vercel Functions do not run under plain `vite dev`. Use the Vercel CLI:
 
 ```bash
 npm install
 npm install -g vercel
 
-# Add your key to .env (see .env.example)
 cp .env.example .env
-# edit .env and set ANTHROPIC_API_KEY=sk-ant-...
+# Edit .env and set ANTHROPIC_API_KEY and RESEND_API_KEY
 
 vercel dev
-# App + API available at http://localhost:3000
+# App + all API routes available at http://localhost:3000
 ```
-
----
-
-## How the API Key Is Protected
-
-The `ANTHROPIC_API_KEY` is read from `process.env` inside the serverless function — it never appears in any file served to the browser. Locally it lives in `.env`, which is listed in `.gitignore`. In production it is set through the Vercel dashboard under **Project → Settings → Environment Variables** and is never written to the repository.
 
 ---
 
 ## Known Limitations
 
-- No authentication — anyone with the URL can consume the API key quota.
-- Very long or disorganized notes may produce inconsistent section structure.
-- Claude may note details as "unknown" even when they are implied by context, because the prompt instructs it not to guess.
-- The Vercel free tier cold-starts the serverless function on the first request after inactivity; first-load generation may take a few extra seconds.
+- No authentication — anyone with the live URL can consume API key quota
+- The checklist and roles calls return JSON; a malformed Claude response causes that card to fail silently
+- Email delivery to arbitrary addresses requires a Resend-verified sending domain (the current `onboarding@resend.dev` sender only delivers to the Resend account owner)
+- Vercel free-tier cold starts add a few seconds of latency on the first request after inactivity
+- No rate limiting on any endpoint
 
 ---
 
-## What I'd Build Next
+## Built By
 
-- Rate limiting on the serverless function to protect quota.
-- Optional severity badge / classification header in the downloaded report.
-- Support for pasting multiple note sources and having Claude reconcile them.
-- A history panel (localStorage) so previously generated reports are recoverable.
+**Nick Ghuneim** — [github.com/nick27g](https://github.com/nick27g)
