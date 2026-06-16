@@ -14,13 +14,22 @@ function ShieldIcon() {
   );
 }
 
+const EMPTY_META = {
+  incidentType: '',
+  severity: '',
+  qualityScore: null,
+  plainEnglish: null,
+  checklist: null,
+  roles: null,
+};
+
 export default function App() {
   const [report, setReport] = useState('');
-  const [meta, setMeta] = useState({ incidentType: '', severity: '', qualityScore: null });
+  const [meta, setMeta] = useState(EMPTY_META);
 
-  function handleGenerate(reportText, incidentType, severity, qualityScore) {
+  function handleGenerate({ report: reportText, incidentType, severity, qualityScore, plainEnglish, checklist, roles }) {
     setReport(reportText);
-    setMeta({ incidentType, severity, qualityScore });
+    setMeta({ incidentType, severity, qualityScore, plainEnglish, checklist, roles });
   }
 
   return (
@@ -74,6 +83,9 @@ export default function App() {
           incidentType={meta.incidentType}
           severity={meta.severity}
           qualityScore={meta.qualityScore}
+          plainEnglish={meta.plainEnglish}
+          checklist={meta.checklist}
+          roles={meta.roles}
         />
       </main>
     </div>

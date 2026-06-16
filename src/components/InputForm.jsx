@@ -2,6 +2,9 @@ import { useState } from 'react';
 import { generateReport } from '../lib/generateReport.js';
 import { detectIncident } from '../lib/detectIncident.js';
 import { scoreNotes } from '../lib/scoreNotes.js';
+import { fetchPlainEnglish } from '../lib/fetchPlainEnglish.js';
+import { fetchChecklist } from '../lib/fetchChecklist.js';
+import { fetchRoles } from '../lib/fetchRoles.js';
 import { getSeverityColors, SEVERITY_BORDER_COLOR } from '../lib/severity.js';
 
 const INCIDENT_TYPES = [
@@ -22,6 +25,12 @@ const SEVERITIES = [
   { value: 'high', label: 'High' },
   { value: 'critical', label: 'Critical' },
 ];
+
+const BUTTON_LABELS = {
+  detecting: 'Detecting...',
+  generating: 'Generating Report...',
+  analyzing: 'Analyzing...',
+};
 
 function typeLabel(value) {
   return INCIDENT_TYPES.find((t) => t.value === value)?.label ?? value;
@@ -61,6 +70,7 @@ export default function InputForm({ onGenerate }) {
     setError('');
     setDetection(null);
 
+    // Phase 1: Auto-detect
     let resolvedType = incidentType !== 'auto' ? incidentType : null;
     let resolvedSeverity = severity !== 'auto' ? severity : null;
 
@@ -77,23 +87,45 @@ export default function InputForm({ onGenerate }) {
       }
     }
 
+    // Phase 2: Generate report + score (parallel)
     setLoadingPhase('generating');
+    let reportText = null;
+    let qualityScore = null;
 
     try {
       const [reportResult, scoreResult] = await Promise.allSettled([
         generateReport({ notes, incidentType: resolvedType, severity: resolvedSeverity }),
         scoreNotes(notes),
       ]);
-
       if (reportResult.status === 'rejected') throw reportResult.reason;
-
-      const qualityScore = scoreResult.status === 'fulfilled' ? scoreResult.value : null;
-      onGenerate(reportResult.value, resolvedType, resolvedSeverity, qualityScore);
+      reportText = reportResult.value;
+      qualityScore = scoreResult.status === 'fulfilled' ? scoreResult.value : null;
     } catch (err) {
       setError(err.message || 'An unexpected error occurred.');
-    } finally {
       setLoadingPhase(null);
+      return;
     }
+
+    // Phase 3: Supplementary analysis (parallel, all fail-safe)
+    setLoadingPhase('analyzing');
+
+    const [peResult, clResult, roResult] = await Promise.allSettled([
+      fetchPlainEnglish(reportText),
+      fetchChecklist({ report: reportText, incidentType: resolvedType, severity: resolvedSeverity }),
+      fetchRoles({ incidentType: resolvedType, severity: resolvedSeverity }),
+    ]);
+
+    setLoadingPhase(null);
+
+    onGenerate({
+      report: reportText,
+      incidentType: resolvedType,
+      severity: resolvedSeverity,
+      qualityScore,
+      plainEnglish: peResult.status === 'fulfilled' ? peResult.value : null,
+      checklist: clResult.status === 'fulfilled' ? clResult.value : null,
+      roles: roResult.status === 'fulfilled' ? roResult.value : null,
+    });
   }
 
   const selectStyle = {
@@ -114,12 +146,7 @@ export default function InputForm({ onGenerate }) {
       ? { ...selectStyle, borderLeftWidth: '3px', borderLeftColor: SEVERITY_BORDER_COLOR[severity] }
       : selectStyle;
 
-  const buttonLabel =
-    loadingPhase === 'detecting'
-      ? 'Detecting...'
-      : loadingPhase === 'generating'
-      ? 'Generating...'
-      : 'Generate Report';
+  const buttonLabel = BUTTON_LABELS[loadingPhase] ?? 'Generate Report';
 
   return (
     <div className="space-y-5">
@@ -239,15 +266,15 @@ export default function InputForm({ onGenerate }) {
       <button
         onClick={handleGenerate}
         disabled={isLoading || !notes.trim()}
-        className="flex items-center gap-2.5 rounded px-6 py-2.5 text-sm font-bold text-slate-900 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+        className="flex items-center gap-2.5 rounded px-6 py-2.5 text-sm font-bold text-slate-900 disabled:cursor-not-allowed disabled:opacity-40"
         style={{
-          background: isLoading ? '#06b6d4' : '#22d3ee',
+          background: '#22d3ee',
           letterSpacing: '0.08em',
           textTransform: 'uppercase',
           fontSize: '11px',
         }}
         onMouseEnter={(e) => { if (!isLoading) e.currentTarget.style.background = '#67e8f9'; }}
-        onMouseLeave={(e) => { e.currentTarget.style.background = isLoading ? '#06b6d4' : '#22d3ee'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = '#22d3ee'; }}
       >
         {isLoading && <Spinner />}
         {buttonLabel}

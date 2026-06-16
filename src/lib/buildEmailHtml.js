@@ -54,15 +54,9 @@ function renderSection(section, index) {
   const content = section.lines.join('\n');
   const isGaps = section.title === 'Information Gaps';
   const showWarning = isGaps && isGapsMeaningful(content);
-
-  const bodyHtml = section.lines
-    .filter((l) => l.trim())
-    .map((l) => `<p style="${BODY_TEXT}">${escHtml(l)}</p>`)
-    .join('');
-
-  const divider = index > 0
-    ? 'border-top:1px solid #e5e7eb;margin-top:24px;padding-top:24px;'
-    : '';
+  const bodyHtml = section.lines.filter((l) => l.trim())
+    .map((l) => `<p style="${BODY_TEXT}">${escHtml(l)}</p>`).join('');
+  const divider = index > 0 ? 'border-top:1px solid #e5e7eb;margin-top:24px;padding-top:24px;' : '';
 
   if (showWarning) {
     return `
@@ -73,7 +67,6 @@ function renderSection(section, index) {
         </div>
       </div>`;
   }
-
   return `
     <div style="${divider}">
       <p style="${LABEL_TEXT}color:#1e3a5f;">${escHtml(section.title)}</p>
@@ -81,14 +74,71 @@ function renderSection(section, index) {
     </div>`;
 }
 
-export function buildEmailHtml({ report, incidentType, severity, score, tip }) {
+function buildPlainEnglishBlock(plainEnglish) {
+  if (!plainEnglish) return '';
+  return `
+    <tr>
+      <td style="background:#eff6ff;padding:24px 32px;border-top:1px solid #bfdbfe;">
+        <p style="${LABEL_TEXT}color:#1e40af;">Plain English Summary</p>
+        <p style="margin:0;font-size:15px;color:#1e293b;line-height:1.75;font-family:Georgia,'Times New Roman',serif;">${escHtml(plainEnglish)}</p>
+      </td>
+    </tr>`;
+}
+
+function buildChecklistBlock(checklist) {
+  if (!checklist || checklist.length === 0) return '';
+  const itemsHtml = checklist.map((item, i) => `
+    <tr>
+      <td style="padding-bottom:12px;vertical-align:top;">
+        <table cellpadding="0" cellspacing="0" role="presentation">
+          <tr>
+            <td style="padding-right:10px;padding-top:1px;font-size:13px;font-weight:700;color:#166534;font-family:Arial,Helvetica,sans-serif;width:24px;">${i + 1}.</td>
+            <td>
+              <p style="margin:0;font-size:14px;color:#1e293b;line-height:1.5;font-family:Arial,Helvetica,sans-serif;">${escHtml(item.text)}</p>
+              <p style="margin:3px 0 0;font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:1px;font-family:Arial,Helvetica,sans-serif;">&rarr; ${escHtml(item.who)}</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>`).join('');
+
+  return `
+    <tr>
+      <td style="background:#f0fdf4;padding:24px 32px;border-top:1px solid #bbf7d0;">
+        <p style="${LABEL_TEXT}color:#166534;">What To Do Right Now</p>
+        <table cellpadding="0" cellspacing="0" width="100%" role="presentation">
+          ${itemsHtml}
+        </table>
+      </td>
+    </tr>`;
+}
+
+function buildRolesBlock(roles) {
+  if (!roles || roles.length === 0) return '';
+  const rolesHtml = roles.map((r, i) => `
+    <tr>
+      <td style="${i > 0 ? 'border-top:1px solid #e5e7eb;padding-top:12px;' : ''}padding-bottom:12px;">
+        <p style="margin:0;font-size:13px;font-weight:700;color:#1e293b;font-family:Arial,Helvetica,sans-serif;">${escHtml(r.role)}</p>
+        <p style="margin:3px 0 0;font-size:13px;color:#4b5563;line-height:1.5;font-family:Arial,Helvetica,sans-serif;">${escHtml(r.note)}</p>
+      </td>
+    </tr>`).join('');
+
+  return `
+    <tr>
+      <td style="background:#f8fafc;padding:24px 32px;border-top:1px solid #e5e7eb;">
+        <p style="${LABEL_TEXT}color:#374151;">Who Needs to Know</p>
+        <table cellpadding="0" cellspacing="0" width="100%" role="presentation">
+          ${rolesHtml}
+        </table>
+      </td>
+    </tr>`;
+}
+
+export function buildEmailHtml({ report, incidentType, severity, score, tip, plainEnglish, checklist, roles }) {
   const sv = SEVERITY_EMAIL[severity] ?? SEVERITY_EMAIL.medium;
-  const dateStr = new Date().toLocaleDateString('en-US', {
-    year: 'numeric', month: 'long', day: 'numeric',
-  });
+  const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   const typeLabel = formatTypeLabel(incidentType);
   const sections = parseReport(report);
-
   const sectionsHtml = sections.map(renderSection).join('');
 
   const sc = score != null ? scoreColors(score) : null;
@@ -97,19 +147,10 @@ export function buildEmailHtml({ report, incidentType, severity, score, tip }) {
       <td style="background:#f8fafc;border-top:1px solid #e5e7eb;padding:16px 32px;">
         <table cellpadding="0" cellspacing="0" width="100%" role="presentation">
           <tr>
-            <td>
-              <span style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:2px;font-family:Arial,Helvetica,sans-serif;">Notes Quality</span>
-            </td>
-            <td align="right">
-              <span style="display:inline-block;background:${sc.bg};color:${sc.color};border-radius:20px;padding:3px 12px;font-size:12px;font-weight:700;font-family:Arial,Helvetica,sans-serif;">${score}/10</span>
-            </td>
+            <td><span style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:2px;font-family:Arial,Helvetica,sans-serif;">Notes Quality</span></td>
+            <td align="right"><span style="display:inline-block;background:${sc.bg};color:${sc.color};border-radius:20px;padding:3px 12px;font-size:12px;font-weight:700;font-family:Arial,Helvetica,sans-serif;">${score}/10</span></td>
           </tr>
-          ${tip ? `
-          <tr>
-            <td colspan="2" style="padding-top:8px;">
-              <p style="margin:0;font-size:12px;color:#64748b;line-height:1.5;font-family:Arial,Helvetica,sans-serif;"><strong style="color:#475569;">Tip:</strong> ${escHtml(tip)}</p>
-            </td>
-          </tr>` : ''}
+          ${tip ? `<tr><td colspan="2" style="padding-top:8px;"><p style="margin:0;font-size:12px;color:#64748b;line-height:1.5;font-family:Arial,Helvetica,sans-serif;"><strong style="color:#475569;">Tip:</strong> ${escHtml(tip)}</p></td></tr>` : ''}
         </table>
       </td>
     </tr>` : '';
@@ -154,6 +195,8 @@ export function buildEmailHtml({ report, incidentType, severity, score, tip }) {
           </td>
         </tr>
 
+        ${buildPlainEnglishBlock(plainEnglish)}
+
         <!-- Report Body -->
         <tr>
           <td style="background:#ffffff;padding:32px;">
@@ -161,6 +204,8 @@ export function buildEmailHtml({ report, incidentType, severity, score, tip }) {
           </td>
         </tr>
 
+        ${buildChecklistBlock(checklist)}
+        ${buildRolesBlock(roles)}
         ${qualityHtml}
 
         <!-- Footer -->

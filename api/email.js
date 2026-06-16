@@ -24,7 +24,7 @@ function toPlainText(report) {
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { email, report, incidentType, severity, score, tip } = req.body ?? {};
+  const { email, report, incidentType, severity, score, tip, plainEnglish, checklist, roles } = req.body ?? {};
 
   if (!email || !report) {
     return res.status(400).json({ error: 'Missing required fields: email, report' });
@@ -42,7 +42,7 @@ export default async function handler(req, res) {
 
     let html;
     try {
-      html = buildEmailHtml({ report, incidentType, severity, score, tip });
+      html = buildEmailHtml({ report, incidentType, severity, score, tip, plainEnglish, checklist, roles });
     } catch (htmlErr) {
       console.error('HTML email build failed, falling back to plain text:', htmlErr);
     }
