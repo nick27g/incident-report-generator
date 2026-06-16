@@ -4,11 +4,11 @@ import ReportOutput from './components/ReportOutput.jsx';
 
 export default function App() {
   const [report, setReport] = useState('');
-  const [meta, setMeta] = useState({ incidentType: '', severity: '' });
+  const [meta, setMeta] = useState({ incidentType: '', severity: '', qualityScore: null });
 
-  function handleGenerate(reportText, incidentType, severity) {
+  function handleGenerate(reportText, incidentType, severity, qualityScore) {
     setReport(reportText);
-    setMeta({ incidentType, severity });
+    setMeta({ incidentType, severity, qualityScore });
   }
 
   return (
@@ -25,6 +25,7 @@ export default function App() {
           report={report}
           incidentType={meta.incidentType}
           severity={meta.severity}
+          qualityScore={meta.qualityScore}
         />
       </main>
     </div>

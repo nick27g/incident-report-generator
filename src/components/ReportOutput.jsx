@@ -1,4 +1,6 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
+import { emailReport } from '../lib/emailReport.js';
+import { getSeverityColors } from '../lib/severity.js';
 
 function parseReport(text) {
   const sections = [];
@@ -23,6 +25,21 @@ function isGapsMeaningful(content) {
   return trimmed.length > 0 && !trimmed.startsWith('none identified');
 }
 
+function toPlainText(report) {
+  return report
+    .replace(/^## (.+)$/gm, (_, h) => h.toUpperCase())
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/\*(.+?)\*/g, '$1')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function scoreColorClass(score) {
+  if (score >= 7) return 'bg-green-100 text-green-800';
+  if (score >= 4) return 'bg-yellow-100 text-yellow-800';
+  return 'bg-red-100 text-red-800';
+}
+
 function SectionBody({ lines }) {
   return (
     <div className="mt-1 space-y-1 text-sm text-gray-700">
@@ -37,35 +54,108 @@ function SectionBody({ lines }) {
   );
 }
 
-export default function ReportOutput({ report, incidentType, severity }) {
-  const copyBtnRef = useRef(null);
+function EmailSection({ report, incidentType, severity }) {
+  const [email, setEmail] = useState('');
+  const [sending, setSending] = useState(false);
+  const [status, setStatus] = useState(null);
+  const [errorMsg, setErrorMsg] = useState('');
+
+  async function handleSend() {
+    setSending(true);
+    setStatus(null);
+    try {
+      await emailReport({ email, report, incidentType, severity });
+      setStatus('success');
+    } catch (err) {
+      setStatus('error');
+      setErrorMsg(err.message || 'Failed to send email.');
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <div className="mt-4 rounded border border-gray-200 bg-white p-4">
+      <h3 className="mb-3 text-sm font-medium text-gray-700">Email this report</h3>
+      <div className="flex gap-2">
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => { setEmail(e.target.value); setStatus(null); }}
+          placeholder="you@example.com"
+          className="flex-1 rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-800 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+        />
+        <button
+          onClick={handleSend}
+          disabled={sending || !email.trim()}
+          className="rounded bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {sending ? 'Sending...' : 'Send to my email'}
+        </button>
+      </div>
+      {status === 'success' && (
+        <p className="mt-2 text-sm text-green-700">Report sent successfully.</p>
+      )}
+      {status === 'error' && (
+        <p className="mt-2 text-sm text-red-600">{errorMsg}</p>
+      )}
+    </div>
+  );
+}
+
+export default function ReportOutput({ report, incidentType, severity, qualityScore }) {
+  const copyMdBtnRef = useRef(null);
+  const copyTxtBtnRef = useRef(null);
 
   if (!report) return null;
 
   const sections = parseReport(report);
+  const severityColors = getSeverityColors(severity);
+  const severityLabel = severity ? severity.charAt(0).toUpperCase() + severity.slice(1) : '';
 
-  function handleCopy() {
-    navigator.clipboard.writeText(report).then(() => {
-      const btn = copyBtnRef.current;
-      if (!btn) return;
-      const original = btn.textContent;
-      btn.textContent = 'Copied!';
-      setTimeout(() => { btn.textContent = original; }, 1500);
-    });
-  }
-
-  function handleDownload() {
-    const now = new Date();
-    const timestamp = now.toISOString().replace(/[:.]/g, '-').slice(0, 19);
-    const dateStr = now.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-    const header = `---\ntype: ${incidentType}\nseverity: ${severity}\ngenerated: ${dateStr}\n---\n\n`;
-    const blob = new Blob([header + report], { type: 'text/markdown' });
+  function makeDownload(content, filename, type) {
+    const blob = new Blob([content], { type });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `incident-report-${timestamp}.md`;
+    a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+  function timestampedFilename(ext) {
+    const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    return `incident-report-${ts}.${ext}`;
+  }
+
+  function handleCopyMd() {
+    navigator.clipboard.writeText(report).then(() => {
+      const btn = copyMdBtnRef.current;
+      if (!btn) return;
+      const orig = btn.textContent;
+      btn.textContent = 'Copied!';
+      setTimeout(() => { btn.textContent = orig; }, 1500);
+    });
+  }
+
+  function handleCopyTxt() {
+    navigator.clipboard.writeText(toPlainText(report)).then(() => {
+      const btn = copyTxtBtnRef.current;
+      if (!btn) return;
+      const orig = btn.textContent;
+      btn.textContent = 'Copied!';
+      setTimeout(() => { btn.textContent = orig; }, 1500);
+    });
+  }
+
+  function handleDownloadMd() {
+    const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    const header = `---\ntype: ${incidentType}\nseverity: ${severity}\ngenerated: ${dateStr}\n---\n\n`;
+    makeDownload(header + report, timestampedFilename('md'), 'text/markdown');
+  }
+
+  function handleDownloadTxt() {
+    makeDownload(toPlainText(report), timestampedFilename('txt'), 'text/plain');
   }
 
   const btnClass =
@@ -73,17 +163,43 @@ export default function ReportOutput({ report, incidentType, severity }) {
 
   return (
     <div className="mt-8">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-base font-semibold text-gray-900">Generated Report</h2>
-        <div className="flex gap-2">
-          <button ref={copyBtnRef} onClick={handleCopy} className={btnClass}>
-            Copy to clipboard
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="text-base font-semibold text-gray-900">Generated Report</h2>
+          {severity && (
+            <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${severityColors.badge}`}>
+              {severityLabel}
+            </span>
+          )}
+          {qualityScore && (
+            <div className="flex items-center gap-1.5">
+              <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${scoreColorClass(qualityScore.score)}`}>
+                Notes quality: {qualityScore.score}/10
+              </span>
+            </div>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button ref={copyMdBtnRef} onClick={handleCopyMd} className={btnClass}>
+            Copy Markdown
           </button>
-          <button onClick={handleDownload} className={btnClass}>
+          <button ref={copyTxtBtnRef} onClick={handleCopyTxt} className={btnClass}>
+            Copy plain text
+          </button>
+          <button onClick={handleDownloadMd} className={btnClass}>
             Download .md
+          </button>
+          <button onClick={handleDownloadTxt} className={btnClass}>
+            Download .txt
           </button>
         </div>
       </div>
+
+      {qualityScore?.tip && (
+        <p className="mb-3 text-xs text-gray-500">
+          <span className="font-medium">Tip:</span> {qualityScore.tip}
+        </p>
+      )}
 
       <div className="rounded border border-gray-200 bg-white p-6">
         {sections.map((section, i) => {
@@ -105,6 +221,8 @@ export default function ReportOutput({ report, incidentType, severity }) {
           );
         })}
       </div>
+
+      <EmailSection report={report} incidentType={incidentType} severity={severity} />
     </div>
   );
 }
