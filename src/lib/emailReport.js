@@ -1,8 +1,8 @@
-export async function emailReport({ email, report, incidentType, severity }) {
+export async function emailReport({ email, report, incidentType, severity, score, tip }) {
   const res = await fetch('/api/email', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, report, incidentType, severity }),
+    body: JSON.stringify({ email, report, incidentType, severity, score, tip }),
   });
 
   let data;

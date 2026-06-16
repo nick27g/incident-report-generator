@@ -34,27 +34,27 @@ function toPlainText(report) {
     .trim();
 }
 
-function scoreColorClass(score) {
-  if (score >= 7) return 'bg-green-100 text-green-800';
-  if (score >= 4) return 'bg-yellow-100 text-yellow-800';
-  return 'bg-red-100 text-red-800';
+function scoreColorStyle(score) {
+  if (score >= 7) return { background: '#052e16', color: '#4ade80', border: '1px solid #166534' };
+  if (score >= 4) return { background: '#2d1a00', color: '#fbbf24', border: '1px solid #92400e' };
+  return { background: '#2d0a0a', color: '#f87171', border: '1px solid #7f1d1d' };
 }
 
 function SectionBody({ lines }) {
   return (
-    <div className="mt-1 space-y-1 text-sm text-gray-700">
+    <div className="mt-2 space-y-1.5">
       {lines.map((line, i) =>
         line.trim() === '' ? (
-          <div key={i} className="h-2" />
+          <div key={i} className="h-1.5" />
         ) : (
-          <p key={i}>{line}</p>
+          <p key={i} className="text-sm leading-relaxed text-slate-300">{line}</p>
         )
       )}
     </div>
   );
 }
 
-function EmailSection({ report, incidentType, severity }) {
+function EmailSection({ report, incidentType, severity, qualityScore }) {
   const [email, setEmail] = useState('');
   const [sending, setSending] = useState(false);
   const [status, setStatus] = useState(null);
@@ -64,7 +64,14 @@ function EmailSection({ report, incidentType, severity }) {
     setSending(true);
     setStatus(null);
     try {
-      await emailReport({ email, report, incidentType, severity });
+      await emailReport({
+        email,
+        report,
+        incidentType,
+        severity,
+        score: qualityScore?.score,
+        tip: qualityScore?.tip,
+      });
       setStatus('success');
     } catch (err) {
       setStatus('error');
@@ -75,29 +82,47 @@ function EmailSection({ report, incidentType, severity }) {
   }
 
   return (
-    <div className="mt-4 rounded border border-gray-200 bg-white p-4">
-      <h3 className="mb-3 text-sm font-medium text-gray-700">Email this report</h3>
+    <div
+      className="mt-4 rounded p-4"
+      style={{ background: '#0a1424', border: '1px solid #1a2e4a' }}
+    >
+      <p
+        className="mb-3 font-semibold text-slate-500"
+        style={{ fontSize: '9px', letterSpacing: '0.18em', textTransform: 'uppercase' }}
+      >
+        Email This Report
+      </p>
       <div className="flex gap-2">
         <input
           type="email"
           value={email}
           onChange={(e) => { setEmail(e.target.value); setStatus(null); }}
           placeholder="you@example.com"
-          className="flex-1 rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-800 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          className="flex-1 rounded text-sm text-slate-100 placeholder-slate-600 focus:outline-none"
+          style={{
+            background: '#0d1829',
+            border: '1px solid #1a2e4a',
+            padding: '7px 12px',
+          }}
+          onFocus={(e) => (e.target.style.borderColor = '#22d3ee')}
+          onBlur={(e) => (e.target.style.borderColor = '#1a2e4a')}
         />
         <button
           onClick={handleSend}
           disabled={sending || !email.trim()}
-          className="rounded bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded px-4 py-1.5 text-sm font-bold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+          style={{ background: '#0891b2' }}
+          onMouseEnter={(e) => { if (!sending) e.currentTarget.style.background = '#06b6d4'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = '#0891b2'; }}
         >
           {sending ? 'Sending...' : 'Send to my email'}
         </button>
       </div>
       {status === 'success' && (
-        <p className="mt-2 text-sm text-green-700">Report sent successfully.</p>
+        <p className="mt-2 text-xs text-green-400">Report sent successfully.</p>
       )}
       {status === 'error' && (
-        <p className="mt-2 text-sm text-red-600">{errorMsg}</p>
+        <p className="mt-2 text-xs text-red-400">{errorMsg}</p>
       )}
     </div>
   );
@@ -128,24 +153,19 @@ export default function ReportOutput({ report, incidentType, severity, qualitySc
     return `incident-report-${ts}.${ext}`;
   }
 
+  function flashBtn(ref, original) {
+    const btn = ref.current;
+    if (!btn) return;
+    btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = original; }, 1500);
+  }
+
   function handleCopyMd() {
-    navigator.clipboard.writeText(report).then(() => {
-      const btn = copyMdBtnRef.current;
-      if (!btn) return;
-      const orig = btn.textContent;
-      btn.textContent = 'Copied!';
-      setTimeout(() => { btn.textContent = orig; }, 1500);
-    });
+    navigator.clipboard.writeText(report).then(() => flashBtn(copyMdBtnRef, 'Copy Markdown'));
   }
 
   function handleCopyTxt() {
-    navigator.clipboard.writeText(toPlainText(report)).then(() => {
-      const btn = copyTxtBtnRef.current;
-      if (!btn) return;
-      const orig = btn.textContent;
-      btn.textContent = 'Copied!';
-      setTimeout(() => { btn.textContent = orig; }, 1500);
-    });
+    navigator.clipboard.writeText(toPlainText(report)).then(() => flashBtn(copyTxtBtnRef, 'Copy plain text'));
   }
 
   function handleDownloadMd() {
@@ -158,60 +178,111 @@ export default function ReportOutput({ report, incidentType, severity, qualitySc
     makeDownload(toPlainText(report), timestampedFilename('txt'), 'text/plain');
   }
 
-  const btnClass =
-    'rounded border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50';
+  const exportBtnStyle = {
+    background: '#0d1829',
+    border: '1px solid #1a2e4a',
+    color: '#94a3b8',
+    borderRadius: '4px',
+    padding: '5px 10px',
+    fontSize: '11px',
+    fontWeight: '500',
+    cursor: 'pointer',
+  };
 
   return (
-    <div className="mt-8">
-      <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <h2 className="text-base font-semibold text-gray-900">Generated Report</h2>
-          {severity && (
-            <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${severityColors.badge}`}>
-              {severityLabel}
-            </span>
-          )}
-          {qualityScore && (
-            <div className="flex items-center gap-1.5">
-              <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${scoreColorClass(qualityScore.score)}`}>
-                Notes quality: {qualityScore.score}/10
-              </span>
-            </div>
-          )}
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button ref={copyMdBtnRef} onClick={handleCopyMd} className={btnClass}>
-            Copy Markdown
-          </button>
-          <button ref={copyTxtBtnRef} onClick={handleCopyTxt} className={btnClass}>
-            Copy plain text
-          </button>
-          <button onClick={handleDownloadMd} className={btnClass}>
-            Download .md
-          </button>
-          <button onClick={handleDownloadTxt} className={btnClass}>
-            Download .txt
-          </button>
-        </div>
+    <div className="mt-10">
+      {/* Header bar */}
+      <div
+        className="mb-1 flex flex-wrap items-center gap-3 pb-4"
+        style={{ borderBottom: '1px solid #0f2040' }}
+      >
+        <span
+          className="font-bold text-slate-500"
+          style={{ fontSize: '9px', letterSpacing: '0.22em', textTransform: 'uppercase' }}
+        >
+          Generated Report
+        </span>
+        <span className="h-px flex-1" style={{ background: '#0f2040' }} />
+
+        {severity && (
+          <span
+            className={`rounded border px-2.5 py-0.5 text-xs font-bold ${severityColors.badge}`}
+          >
+            {severityLabel}
+          </span>
+        )}
+
+        {qualityScore && (
+          <span
+            className="rounded px-2.5 py-0.5 text-xs font-bold"
+            style={scoreColorStyle(qualityScore.score)}
+          >
+            QUALITY {qualityScore.score}/10
+          </span>
+        )}
       </div>
 
       {qualityScore?.tip && (
-        <p className="mb-3 text-xs text-gray-500">
-          <span className="font-medium">Tip:</span> {qualityScore.tip}
+        <p className="mb-4 text-xs text-slate-600">
+          <span className="font-semibold text-slate-500">Analyst tip:</span> {qualityScore.tip}
         </p>
       )}
 
-      <div className="rounded border border-gray-200 bg-white p-6">
+      {/* Export buttons */}
+      <div className="mb-4 flex flex-wrap gap-2">
+        <button ref={copyMdBtnRef} onClick={handleCopyMd} style={exportBtnStyle}
+          onMouseEnter={(e) => { e.currentTarget.style.color = '#e2e8f0'; e.currentTarget.style.borderColor = '#2a4060'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = '#94a3b8'; e.currentTarget.style.borderColor = '#1a2e4a'; }}
+        >
+          Copy Markdown
+        </button>
+        <button ref={copyTxtBtnRef} onClick={handleCopyTxt} style={exportBtnStyle}
+          onMouseEnter={(e) => { e.currentTarget.style.color = '#e2e8f0'; e.currentTarget.style.borderColor = '#2a4060'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = '#94a3b8'; e.currentTarget.style.borderColor = '#1a2e4a'; }}
+        >
+          Copy plain text
+        </button>
+        <button onClick={handleDownloadMd} style={exportBtnStyle}
+          onMouseEnter={(e) => { e.currentTarget.style.color = '#e2e8f0'; e.currentTarget.style.borderColor = '#2a4060'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = '#94a3b8'; e.currentTarget.style.borderColor = '#1a2e4a'; }}
+        >
+          Download .md
+        </button>
+        <button onClick={handleDownloadTxt} style={exportBtnStyle}
+          onMouseEnter={(e) => { e.currentTarget.style.color = '#e2e8f0'; e.currentTarget.style.borderColor = '#2a4060'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = '#94a3b8'; e.currentTarget.style.borderColor = '#1a2e4a'; }}
+        >
+          Download .txt
+        </button>
+      </div>
+
+      {/* Report document */}
+      <div
+        className="rounded"
+        style={{ background: '#0a1424', border: '1px solid #1a2e4a' }}
+      >
         {sections.map((section, i) => {
           const content = section.lines.join('\n');
           const isGaps = section.title === 'Information Gaps';
           const showWarning = isGaps && isGapsMeaningful(content);
 
           return (
-            <div key={i} className={i > 0 ? 'mt-6' : ''}>
-              <h3 className="font-bold text-gray-900">{section.title}</h3>
+            <div
+              key={i}
+              className="px-6 py-5"
+              style={i > 0 ? { borderTop: '1px solid #0f2040' } : {}}
+            >
+              <p
+                className="font-bold text-cyan-500"
+                style={{ fontSize: '9px', letterSpacing: '0.22em', textTransform: 'uppercase', marginBottom: '2px' }}
+              >
+                {section.title}
+              </p>
               {showWarning ? (
-                <div className="mt-2 rounded border border-yellow-300 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
+                <div
+                  className="mt-2 rounded p-3"
+                  style={{ background: '#1a1000', border: '1px solid #4a3000' }}
+                >
                   <SectionBody lines={section.lines} />
                 </div>
               ) : (
@@ -222,7 +293,12 @@ export default function ReportOutput({ report, incidentType, severity, qualitySc
         })}
       </div>
 
-      <EmailSection report={report} incidentType={incidentType} severity={severity} />
+      <EmailSection
+        report={report}
+        incidentType={incidentType}
+        severity={severity}
+        qualityScore={qualityScore}
+      />
     </div>
   );
 }
