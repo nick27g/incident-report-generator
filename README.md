@@ -1,6 +1,6 @@
 # Incident Report Generator
 
-A dark-themed, AI-powered web app that transforms raw, unstructured incident-response notes into a complete security incident report package — including a plain-English executive summary, an interactive remediation checklist, a stakeholder notification guide, and an interactive incident timeline. Built as a portfolio project targeting an AI-Enabled Solutions Developer role at HII Mission Technologies.
+A dark-themed, AI-powered web app that transforms raw, unstructured incident-response notes into a complete security incident report package — including a plain-English executive summary, an interactive remediation checklist, a stakeholder notification guide, and an interactive incident timeline. 
 
 **Live demo:** https://incident-report-generator-ruby.vercel.app
 
